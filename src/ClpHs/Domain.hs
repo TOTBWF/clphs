@@ -1,4 +1,4 @@
-module ClpHs.Domain 
+module ClpHs.Domain
     ( Domain
     , Bound
     , inf
@@ -14,12 +14,16 @@ module ClpHs.Domain
     , intersection
     , removeGreater
     , removeLesser
+    , remove
+    , subtract
     , singleton
+    , isSingleton
+    , prettyPrint
     )
 where
 
-import Prelude hiding (null)
-import Data.List (sortBy)
+import Prelude hiding (null, subtract)
+import Data.List (sortBy, foldl')
 
 data Bound
     = N !Int    -- ^ Some integer bound
@@ -28,11 +32,11 @@ data Bound
     deriving (Show)
 
 instance Eq Bound where
-    (==) = bequal 
+    (==) = bequal
     (/=) = bnequal
 
 instance Ord Bound where
-    compare = bcompare 
+    compare = bcompare
 
 instance Num Bound where
     (+) = bbinop (+)
@@ -185,6 +189,64 @@ intervalsToDomain is =
 union :: Domain -> Domain -> Domain
 union d1 d2 = intervalsToDomain $ mergeIntervals (intervals d1 ++ intervals d2)
 
+unions :: [Domain] -> Domain
+unions = foldl' union Empty
+
+-- | Removes a domain r from a domain d
+subtract :: Domain -> Domain -> Domain
+subtract d Empty  = d
+subtract Empty _ = Empty
+subtract (Range from to) (Range rfrom rto) 
+    | rto < from || rfrom > to = Range from to
+    | rfrom <= from && rto >= to = Empty
+    | rfrom == to = Range from (to - 1)
+    | rto == from = Range (from + 1) to
+    -- | rto >= from = Range (rto + 1) to
+    -- | rfrom <= to = Range from (rfrom - 1)
+    -- | rfrom < from && rto < to  = Range from (rto - 1)
+    -- | rfrom > from && rto > to = Range (rfrom + 1) to
+    | otherwise = 
+        let (N s) = rto
+        in Split s (Range from (rfrom - 1)) (Range (rto + 1) to)
+subtract (Split s l r) rm@(Range rfrom rto) 
+    | rfrom == (N s) && rto == (N s) = (Split s l r)
+    | rfrom < (N s) && rto < (N s) = case subtract l rm of
+        Empty -> r
+        l' -> (Split s l' r)
+    | rfrom > (N s) && rto > (N s) = case subtract r rm of
+        Empty -> l
+        r' -> (Split s l r')
+    | otherwise = case (subtract l rm, subtract r rm) of
+        (Empty, r') -> r'
+        (l', Empty) -> l'
+        (l', r') -> (Split s l' r')
+subtract d (Split rs rl rr) = intersection (subtract d rl) (subtract d rr)
+
+remove :: Int -> Domain -> Domain
+remove _ Empty = Empty
+remove n (Range Inf to)
+    | to == (N n) = Range Inf (to - 1)
+    | to < (N n) = Range Inf to
+    | otherwise = Split n (Range Inf (N $ n -  1)) (Range (N $ n + 1) to)
+remove n (Range (N from) Sup)
+    | from == n = Range (N $ from + 1) Sup
+    | from > n = Range (N from) Sup
+    | otherwise = Split n (Range (N from) (N $ n - 1)) (Range (N $ n + 1) Sup)
+remove n (Range (N from) (N to))
+    | from == to && n == from = Empty
+    | from == n = Range (N $ from + 1) (N to)
+    | to == n = Range (N from) (N $ to - 1)
+    | n > from && n < to = Split n (Range (N from) (N $ n - 1)) (Range (N $ n + 1) (N to))
+    | otherwise = Range (N from) (N to)
+remove n (Split s l r)
+    | s == n = Split s l r
+    | n < s = case remove n l of
+        Empty -> r
+        l' -> Split s l' r
+    | otherwise = case remove n r of
+        Empty -> l
+        r' -> Split s l r'
+
 -- | Computes the intersection of 2 domains
 intersection :: Domain -> Domain -> Domain
 intersection Empty _ = Empty
@@ -215,12 +277,12 @@ narrow (Range l u) from to =
 removeGreater :: Bound -> Domain -> Domain
 removeGreater _ Empty = Empty
 removeGreater n (Split s l r)
-    | n >= (N s) = 
+    | n >= (N s) =
         case removeGreater n r of
             Empty -> l
             r' -> Split s l r'
     | otherwise = removeGreater n l
-removeGreater n (Range from to) 
+removeGreater n (Range from to)
     | from > n = Empty
     | otherwise = Range from (min n to)
 
@@ -236,8 +298,22 @@ removeLesser n (Range from to)
     | to < n = Empty
     | otherwise = Range (max n from) to
 
-
-
 -- | Creates a domain with one element
 singleton :: Int -> Domain
 singleton n = Range (N n) (N n)
+
+isSingleton :: Domain -> Bool
+isSingleton (Range (N from) (N to)) = from == to
+isSingleton _ = False
+
+ppb :: Bound -> String
+ppb Inf = "inf"
+ppb Sup = "sub"
+ppb (N n) = show n
+
+prettyPrint :: Domain -> String
+prettyPrint Empty = "[]"
+prettyPrint (Split _ l r) = prettyPrint l ++ ", " ++ prettyPrint r
+prettyPrint (Range from to) 
+    | from == to = "[" ++ ppb from ++ "]"
+    | otherwise = "[" ++ ppb from ++ " .. " ++ ppb to ++ "]"

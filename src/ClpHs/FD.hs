@@ -12,6 +12,7 @@ module ClpHs.FD
     , (#<=)
     , (#>)
     , (#<)
+    , allDifferent
     , cmax
     , new
     , news
@@ -25,6 +26,10 @@ import Control.Applicative (Alternative)
 
 import qualified Data.Map as Map
 import Data.Map (Map, (!))
+
+-- Debugging
+import Debug.Trace
+import System.IO.Unsafe
 
 import qualified ClpHs.Domain as Domain
 import ClpHs.Domain (Domain, Bound)
@@ -128,7 +133,9 @@ neq :: FDVar s -> FDVar s -> FDConstraint s
 neq = addBinaryConstraint $ \x y -> do
     dx <- domain x
     dy <- domain y
-    guard $ Domain.size dx > 1 || Domain.size dy > 1 || dx /= dy
+    guard $ (not $ Domain.isSingleton dx) || (not $ Domain.isSingleton dy) || dx /= dy
+    when (Domain.isSingleton dy) $ putDomain x dx (dx `Domain.subtract` dy)
+    when (Domain.isSingleton dx) $ putDomain y dy (dy `Domain.subtract` dx)
 
 geq :: FDVar s -> FDVar s -> FDConstraint s
 geq = addBinaryConstraint $ \x y -> do
@@ -269,8 +276,15 @@ x #> y = (x + 1) #>= y
 (#<) :: FDExpr s -> FDExpr s -> FDConstraint s
 x #< y = y #> x
 
+allDifferent :: [FDExpr s] -> FDConstraint s
+allDifferent (x:xs) = do
+    mapM_ (#/= x) xs
+    allDifferent xs
+allDifferent [] = return ()
+
 cmax :: [FDExpr s] -> FDExpr s
 cmax = foldl1 Max
+
 
 new :: Domain -> FD s (FDExpr s)
 new d = Var <$> newVar d
