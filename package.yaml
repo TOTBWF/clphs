@@ -28,6 +28,16 @@ dependencies:
 library:
   source-dirs: src
 
+executables:
+  sudoku:
+    main:                Sudoku.hs
+    source-dirs:         examples
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - clphs
 tests:
   clphs-test:
     main:                Spec.hs

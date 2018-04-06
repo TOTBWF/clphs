@@ -1,4 +1,5 @@
-module ClpHs.Domain
+{-# LANGUAGE PatternSynonyms #-}
+module CLPHS.FD.Domain
     ( Domain
     , Bound
     , inf
@@ -142,11 +143,11 @@ findMax (Range _ to) = to
 
 findMin :: Domain -> Bound
 findMin Empty = error "findMin: Empty domain has no minimal element"
-findMin (Split _ _ r) = findMin r
+findMin (Split _ l _) = findMin l
 findMin (Range from _) = from
 
 range :: Bound -> Bound -> Domain
-range = Range
+range l u = Range l u
 
 -- | Converts a domain into the list of integers it contains
 toList :: Domain -> [Int]
@@ -302,9 +303,9 @@ removeLesser n (Range from to)
 singleton :: Int -> Domain
 singleton n = Range (N n) (N n)
 
-isSingleton :: Domain -> Bool
-isSingleton (Range (N from) (N to)) = from == to
-isSingleton _ = False
+isSingleton :: Domain -> Maybe Int
+isSingleton (Range (N from) (N to)) | from == to = Just from
+isSingleton _ = Nothing
 
 ppb :: Bound -> String
 ppb Inf = "inf"

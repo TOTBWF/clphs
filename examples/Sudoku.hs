@@ -1,10 +1,14 @@
-module Sudoku where
+{-# LANGUAGE PatternSynonyms #-}
+module Main where
 
 import Control.Monad
 import Data.List (transpose)
 
-import ClpHs.FD
-import qualified ClpHs.Domain as Domain
+import CLPHS.FD
+import qualified CLPHS.FD.Domain as Domain
+import CLPHS.FD.Domain (Domain)
+
+
 
 type Sudoku = [Int]
 
@@ -48,3 +52,6 @@ columns = transpose . rows
 
 boxes :: [a] -> [[a]]
 boxes = concatMap (map concat . transpose) . chunk 3 . chunk 3 . chunk 3
+
+main :: IO ()
+main = printSudoku test
