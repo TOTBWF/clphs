@@ -61,6 +61,7 @@ initState = FDState { varSupply = FDVar 0, varMap = Map.empty, runCount = 0, was
 
 runFD :: (forall s . FD s a) -> [a]
 runFD s = observeAll $ evalStateT (unFD s) initState
+
 newVar :: Domain -> FD s (FDVar s)
 newVar d = do
     v <- nextVar
@@ -106,11 +107,8 @@ domainBounds dx = (Domain.findMin dx, Domain.findMax dx)
 trigger :: [FDPropagator s] -> FD s [FDPropagator s]
 trigger [] = return []
 trigger (p:ps) = do
-    p
-    k <- gets wasKilled
-    revive
+    k <- p *> gets wasKilled <* revive
     if k then trigger ps else (p:) <$> trigger ps
-    -- (p:) <$> trigger ps
 
 triggerPropagators :: [FDPropagator s] -> Domain -> Domain -> FD s [FDPropagator s]
 triggerPropagators ps d d'
@@ -173,11 +171,6 @@ varsLabel = mapM label
             var `hasValue` val
             return val
         
-
-{-
-When we are presented with a CLP expression, we need to interpret it as a series
-of constraints and propagators that need to be triggered once.
--}
 
 data FDExpr s
     = Int !Int
