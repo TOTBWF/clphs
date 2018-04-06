@@ -110,10 +110,10 @@ trigger (p:ps) = do
     k <- p *> gets wasKilled <* revive
     if k then trigger ps else (p:) <$> trigger ps
 
-triggerPropagators :: [FDPropagator s] -> Domain -> Domain -> FD s [FDPropagator s]
-triggerPropagators ps d d'
-    | d /= d' = trigger ps
-    | otherwise = return ps
+-- triggerPropagators :: [FDPropagator s] -> Domain -> Domain -> FD s [FDPropagator s]
+-- triggerPropagators ps d d'
+--     | d /= d' = trigger ps
+--     | otherwise = return ps
     -- when (d /= d') $ trigger ps
 
 getVarInfo :: FDVar s -> FD s (VarInfo s)
@@ -125,9 +125,10 @@ updateVarInfo x vi = modify (\s -> s { varMap = Map.insert x vi (varMap s) })
 update :: FDVar s -> Domain -> FD s ()
 update x d = do
     vi <- getVarInfo x
-    updateVarInfo x (vi { values = d })
-    ps' <- triggerPropagators (delayedPropagators vi) (values vi) d
-    updateVarInfo x (vi { values = d, delayedPropagators = ps' })
+    when (values vi /= d) $ do
+        updateVarInfo x (vi { values = d })
+        ps' <- trigger $ delayedPropagators vi
+        updateVarInfo x (vi { values = d, delayedPropagators = ps' })
 
 addConstraint :: FDVar s -> FDPropagator s -> FD s ()
 addConstraint x propagator = do
@@ -221,14 +222,18 @@ peq :: FDVar s -> FDVar s -> FDPropagator s
 peq = addBinaryPropagator $ \x y -> do
     dx <- domain x
     dy <- domain y
-    let i = Domain.intersection dx dy
-    guard $ not $ Domain.null i
-    update x i
-    update y i
+    case (Domain.isSingleton dx, Domain.isSingleton dy) of
+        (Just vx, Just vy) -> guard (vx == vy) >> kill
+        (Just vx, Nothing) -> update y (Domain.singleton vx)
+        (Nothing, Just vy) -> update x (Domain.singleton vy)
+        (Nothing, Nothing) -> do
+            let di = Domain.intersection dx dy
+            guard $ not $ Domain.null di
+            update x di
+            update y di
 
 pneq :: FDVar s -> FDVar s -> FDPropagator s
 pneq = addBinaryPropagator $ \x y -> do
-    -- modify(\s@FDState { runCount = c } -> trace ("Run Count:" ++ show (c + 1)) (s { runCount = c + 1 }))
     dx <- domain x
     dy <- domain y
     case (Domain.isSingleton dx, Domain.isSingleton dy) of
@@ -260,16 +265,6 @@ pgeq = addBinaryPropagator $ \x y -> do
             let (dyl, dyu) = domainBounds dy
             guard $ (dxu >= dyl)
 
-
-    -- unless (Domain.findMin dx >= Domain.findMax dy) $ pgeq x y
-    -- where
-    --     pgeq :: FDVar s -> FDVar s -> FDPropagator s
-    --     pgeq x y = do
-    --         (dx, dxl, dxu) <- domain' x
-    --         (dy, dyl, dyu) <- domain' y
-    --         unless (dxl >= dyu) $ do
-    --             updateBounds x (max dxl dyl) dxu 
-    --             updateBounds y dyl (min dxu dyu)
 
 pplus :: FDVar s -> FDVar s -> FDVar s -> FDPropagator s
 pplus x y z = do
