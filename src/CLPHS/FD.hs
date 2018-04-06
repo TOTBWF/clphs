@@ -22,6 +22,7 @@ where
 
 import Control.Monad.State.Lazy
 import Control.Monad.Except
+import Control.Monad.Logic
 import Control.Monad (unless)
 import Control.Applicative (Alternative)
 
@@ -43,7 +44,7 @@ Also, you shouldn't queue up constraints on the variables, but rather build a pr
 This makes it easier to remove propagators entirely.
 -}
 
-newtype FD s a = FD { unFD :: StateT (FDState s) [] a }
+newtype FD s a = FD { unFD :: StateT (FDState s) Logic a }
     deriving (Functor, Applicative, Monad, Alternative, MonadPlus, MonadState (FDState s))
 
 newtype FDVar s = FDVar { unFDVar :: Int }
@@ -59,7 +60,7 @@ initState :: FDState s
 initState = FDState { varSupply = FDVar 0, varMap = Map.empty, runCount = 0, wasKilled = False }
 
 runFD :: (forall s . FD s a) -> [a]
-runFD s = evalStateT (unFD s) initState
+runFD s = observeAll $ evalStateT (unFD s) initState
 newVar :: Domain -> FD s (FDVar s)
 newVar d = do
     v <- nextVar
@@ -168,11 +169,10 @@ varsLabel = mapM label
     where
         label var = do
             vals <- domain var
-            -- What we do is try constraining the variable to each of the values
-            -- in its domain, and propagate that constraint, searching for a series of values that satisfy the constraints
-            val <- FD . lift $ Domain.toList vals
+            val <- FD . lift $ msum $ return <$> Domain.toList vals
             var `hasValue` val
             return val
+        
 
 {-
 When we are presented with a CLP expression, we need to interpret it as a series
