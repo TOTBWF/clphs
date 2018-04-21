@@ -110,11 +110,6 @@ trigger (p:ps) = do
     k <- p *> gets wasKilled <* revive
     if k then trigger ps else (p:) <$> trigger ps
 
--- triggerPropagators :: [FDPropagator s] -> Domain -> Domain -> FD s [FDPropagator s]
--- triggerPropagators ps d d'
---     | d /= d' = trigger ps
---     | otherwise = return ps
-    -- when (d /= d') $ trigger ps
 
 getVarInfo :: FDVar s -> FD s (VarInfo s)
 getVarInfo x = gets ((! x)  . varMap)
@@ -147,6 +142,15 @@ addBinaryPropagator f x y = do
     addConstraint x constraint
     addConstraint y constraint
 
+type TrinaryPropagator s = FDVar s -> FDVar s -> FDVar s -> FDPropagator s
+
+addTrinaryPropagator :: TrinaryPropagator s -> TrinaryPropagator s
+addTrinaryPropagator f x y z = do
+    let constraint = f x y z
+    constraint
+    addConstraint x constraint
+    addConstraint y constraint
+    addConstraint z constraint
 -- kill should prevent a propagator from being run again, 
 -- as all of the values have been constrainted in such a way that it will always be true
 kill :: FD s ()
@@ -267,7 +271,8 @@ pgeq = addBinaryPropagator $ \x y -> do
 
 
 pplus :: FDVar s -> FDVar s -> FDVar s -> FDPropagator s
-pplus x y z = do
+pplus = addTrinaryPropagator $ \x y z -> do
+    trace "Running pplus" return ()
     (dx, dxl, dxu) <- domain' x
     (dy, dyl, dyu) <- domain' y
     (dz, dzl, dzu) <- domain' z
@@ -284,7 +289,7 @@ pplus x y z = do
     updateBounds z dzl' dzu'
 
 pmax :: FDVar s -> FDVar s -> FDVar s -> FDPropagator s
-pmax x y z = do
+pmax = addTrinaryPropagator $ \x y z -> do
     dz <- domain z
     (_, dxl, dxu) <- domain' x
     (_, dyl, dyu) <- domain' y
@@ -295,7 +300,7 @@ pmax x y z = do
             putDomain z dz dz'
 
 ptimes :: FDVar s -> FDVar s -> FDVar s -> FDPropagator s
-ptimes x y z = do
+ptimes = addTrinaryPropagator $ \x y z -> do
     dx <- domain x
     dy <- domain y
     dz <- domain z
@@ -343,8 +348,8 @@ infixl 1 #==, #/=, #<=, #>=, #>, #<
 -- Auxillary variables are super expensive, so we should avoid them whenever possible
 
 (#==) :: FDExpr s -> FDExpr s -> FDPropagator s
-x #== (y :+ z) = liftJ3 pplus (interpret x) (interpret y) (interpret z)
-x #== (y :- z) = liftJ3 pplus (interpret x) (interpret z) (interpret y)
+z #== (x :+ y) = liftJ3 pplus (interpret x) (interpret y) (interpret z)
+z #== (x :- y) = liftJ3 pplus (interpret z) (interpret y) (interpret x)
 x #== y = liftJ2 peq (interpret x) (interpret y)
 
 (#/=) :: FDExpr s -> FDExpr s -> FDPropagator s

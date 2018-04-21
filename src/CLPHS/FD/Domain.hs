@@ -154,7 +154,7 @@ toList :: Domain -> [Int]
 toList Empty = []
 toList (Split _ l r) = toList l ++ toList r
 toList (Range (N from) (N to)) = [from .. to]
-toList _ = error "toList: Infinite domain"
+toList d = error ("toList: Infinite domain " ++ prettyPrint d)
 
 -- | Converts a domain into a series of (From, To) intervals
 intervals :: Domain -> [(Bound, Bound)]
