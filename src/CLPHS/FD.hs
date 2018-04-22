@@ -272,7 +272,6 @@ pgeq = addBinaryPropagator $ \x y -> do
 
 pplus :: FDVar s -> FDVar s -> FDVar s -> FDPropagator s
 pplus = addTrinaryPropagator $ \x y z -> do
-    trace "Running pplus" return ()
     (dx, dxl, dxu) <- domain' x
     (dy, dyl, dyu) <- domain' y
     (dz, dzl, dzu) <- domain' z
